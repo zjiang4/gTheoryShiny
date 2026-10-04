@@ -1,0 +1,5 @@
+# Copy this file to .Renviron or set these variables in the server environment.
+# Never commit real credentials.
+NVIDIA_API_KEY=
+NVIDIA_MODEL=z-ai/glm-5.3-flash
+NVIDIA_API_URL=https://integrate.api.nvidia.com/v1/chat/completions

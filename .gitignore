@@ -1,0 +1,14 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+.Rlib/
+.Renviron
+.DS_Store
+*.log
+Rplots.pdf
+/references/
+/manual_files/
+/shinyBN_Manual.pdf
+/manuscript/work/
+__pycache__/

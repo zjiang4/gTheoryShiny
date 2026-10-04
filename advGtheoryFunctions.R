@@ -1,0 +1,512 @@
+#' @title Generate the variance components from a G-study
+#' @import lme4
+#' @description
+#' Generates the variance components and the relative magnitude (percent of total variance) of each variance component.
+#'
+#' @param x An lmer fitted object
+#'
+#' @examples
+#' lme4.res<-lmer(Score ~ (1 | Person) + (1 | Task) +(1 | Rater:Task) + (1 | Person:Task),data = Brennan.3.2)
+#' one_facet <- lmer(Score ~ (1 | Participants) + (1 | Items), data = efData)
+#' two_facet <- lmer(scores ~ (1 | students) + (1  | prompts) + (1 | raters) + (1 | students:prompts) +  (1 | students:raters) + (1 | prompts:raters), data = writing)
+#' gstudy(one_facet)
+#' gstudy(two_facet)
+#' # Two facet with prompts fixed
+#' gstudy(two_facet, fixed = "prompts")
+#' @export
+
+
+
+#function
+gstudy <- function(x, fixed = NULL) {
+  tmp <- as.data.frame(VarCorr(x))
+  tmp <- tmp[c(1,4)] # select out variance components
+  no.match <- function(x) {x[-match(fixed, x)]}
+  if(!is.null(fixed)){
+    n_adj <- length(unique(x@frame[,grep(fixed, names(x@frame))]))
+    fixed_vars <- tmp[grep(fixed, tmp$grp),]
+    fixed_vars <- fixed_vars[-match(fixed, fixed_vars$grp),]
+    fixed_vars$adj_vcov <- fixed_vars$vcov/n_adj; fixed_vars$vcov <- NULL
+    add_back <- strsplit(fixed_vars$grp, ":")
+    fixed_vars$grp <- sapply(add_back, no.match)
+    two.way <- data.frame(grp = paste(fixed_vars$grp, collapse = ":"), adj_vcov = tmp[nrow(tmp),2]/n_adj)
+    fixed_vars <- rbind(fixed_vars, two.way)
+    tmp <- merge(tmp, fixed_vars)
+    tmp[,2] <- tmp[,2] + tmp[,3]; tmp[,3] <- NULL
+    tmp$grp[length(tmp$grp)] <- "Residual"
+  }
+  colnames(tmp) <- c("Source", "Est.Variance")
+  tmp$Percent.Variance <- tmp$Est.Variance/sum(tmp$Est.Variance)
+  N <- length(x@resp$y)
+  output <- list(gstudy.out = tmp, nobs = N)
+  class(output) <- "gStudy"
+  return(output)
+}
+
+#variable
+# gstudy.res <- gstudy(lme4.res)
+cbind_dif <- function(x = list()){
+  # Find max length
+  max_length <- max(unlist(lapply(x, length)))
+  
+  # Set length of each vector as
+  res <- lapply(x, function(x){
+    length(x) <- max_length
+    return(x)
+  })
+  
+  return(as.data.frame(res))
+}
+
+extractTheta <- function(x) {
+  est <- coef(x)
+  est <- sapply(est, function(x) unlist(x))
+  cbind_dif(est)
+}
+
+
+#function
+gstudy.forboot <- function(x, fixed = NULL) {
+  tmp <- as.data.frame(VarCorr(x))
+  tmp <- tmp[c(1, 4)]
+  no.match <- function(x) {
+    x[-match(fixed, x)]
+  }
+  if (!is.null(fixed)) {
+    n_adj <- length(unique(x@frame[, grep(fixed, names(x@frame))]))
+    fixed_vars <- tmp[grep(fixed, tmp$grp), ]
+    fixed_vars <- fixed_vars[-match(fixed, fixed_vars$grp), ]
+    fixed_vars$adj_vcov <-
+      fixed_vars$vcov / n_adj
+    fixed_vars$vcov <- NULL
+    add_back <- strsplit(fixed_vars$grp, ":")
+    fixed_vars$grp <- sapply(add_back, no.match)
+    two.way <-
+      data.frame(grp = paste(fixed_vars$grp, collapse = ":"),
+                 adj_vcov = tmp[nrow(tmp), 2] / n_adj)
+    fixed_vars <- rbind(fixed_vars, two.way)
+    tmp <- merge(tmp, fixed_vars)
+    tmp[, 2] <- tmp[, 2] + tmp[, 3]
+    tmp[, 3] <- NULL
+    tmp$grp[length(tmp$grp)] <- "Residual"
+  }
+  colnames(tmp) <- c("Source", "Est.Variance")
+  tmp$Percent.Variance <- tmp$Est.Variance / sum(tmp$Est.Variance)
+  N <- length(x@resp$y)
+  output <- list(gstudy.out = tmp, nobs = N)
+  class(output) <- "gStudy"
+  output$gstudy.out[, 2]
+}
+
+#function and variable
+# boot.gstudy<-lme4::bootMer(lme4.res, gstudy.forboot, nsim=nboot, use.u=FALSE, type="parametric",parallel = "snow",ncpus =2) 
+# boot.gstudy.res<-cbind(gstudy.res$gstudy.out,t(boot.gstudy$t))
+# gstudy.res.CI<-t(apply(t(boot.gstudy$t),1,function(x){quantile(x, probs = c(.025, .975))}))
+
+
+#' Prints the results from the G-study
+#'
+#' Prints  output from fitting the \code{gstudy} function.
+#' @param x object of class \code{gStudy} returned from the \code{gstudy} function
+#' @param ... additional objects of the same type.
+#' @method print gStudy
+#' @seealso \code{\link{gstudy}}
+#' @export
+print.gStudy <- function(x, ...){
+  print(x$gstudy.out)
+}
+
+
+
+
+
+
+#' @title Conduct a dependability study
+#' @import lme4
+#' @description
+#' Generates the variance components and the relative magnitude (percent of total variance) of each variance component.
+#'
+#' @param x A gstudy object
+#' @param n A vector with facets named
+#' @param unit The label for the unit of measurement
+#'
+#' @examples
+#' ## One facet design
+#' one.facet <- lmer(Score ~ (1 | Participants) + (1 | Items), data = efData)
+#' one.facet.gstudy <- gstudy(one.facet)
+#' dstudy(one.facet.gstudy, n = c("Items" = 4), unit = "Participants")
+#'
+#' ## Two facet design
+#' two_facet <- lmer(scores ~ (1 | students) + (1  | prompts) + (1 | raters) + (1 | students:prompts) +  (1 | students:raters) + (1 | prompts:raters), data = writing)
+#' two_facet_gstudy <- gstudy(two_facet)
+#' dstudy(two_facet_gstudy, n = c("raters" = 2, "prompts" = 5), unit = "students")
+#'
+#' ## Two facet fixed design with prompt
+#' gstudy_fixed_prompt <- gstudy(two.facet, fixed = "prompts")
+#' dstudy(gstudy_fixed_prompt, n = c("raters" = 2), unit = "students")
+#' @export
+
+
+#function
+dstudy <- function(x, n, unit) {
+  tmp <- x$gstudy.out[c("Source", "Est.Variance")]
+  n_names <- names(n)
+  n <- as.numeric(n)
+  names(n) <- n_names
+
+  if (length(n) == 0 || is.null(n_names) || length(n_names) != length(n) ||
+      any(!nzchar(n_names)) || any(!is.finite(n)) || any(n < 1)) {
+    stop("D-study sample sizes must be named, finite values of at least 1.", call. = FALSE)
+  }
+  if (anyDuplicated(names(n))) {
+    stop("D-study facet names must be unique.", call. = FALSE)
+  }
+  unit_row <- match(unit, tmp$Source)
+  if (is.na(unit_row)) {
+    stop(sprintf("No universe-score variance component was found for '%s'.", unit), call. = FALSE)
+  }
+
+  source_terms <- strsplit(as.character(tmp$Source), ":", fixed = TRUE)
+  denominator <- vapply(source_terms, function(terms) {
+    if (identical(terms, "Residual")) {
+      return(prod(n))
+    }
+    included <- intersect(terms, names(n))
+    if (length(included) == 0) 1 else prod(n[included])
+  }, numeric(1))
+
+  tmp$n <- denominator
+  tmp$vcov.n <- tmp$Est.Variance / denominator
+  tmp$n[unit_row] <- 1
+  tmp$vcov.n[unit_row] <- tmp$Est.Variance[unit_row]
+
+  is_residual <- tmp$Source == "Residual"
+  contains_unit <- vapply(source_terms, function(terms) unit %in% terms, logical(1))
+  relative_rows <- (contains_unit & seq_len(nrow(tmp)) != unit_row) | is_residual
+  absolute_rows <- seq_len(nrow(tmp)) != unit_row
+
+  us.var <- tmp$Est.Variance[unit_row]
+  rel.var <- sum(tmp$vcov.n[relative_rows], na.rm = TRUE)
+  abs.var <- sum(tmp$vcov.n[absolute_rows], na.rm = TRUE)
+  g.coef <- us.var / (us.var + rel.var)
+  d.coef <- us.var / (us.var + abs.var)
+
+  output <- list(ds.df = tmp, relvar = rel.var, absvar = abs.var, gcoef = g.coef, dcoef = d.coef)
+  class(output) <- "dStudy"
+  output
+}
+
+#variable
+# dstudy.res<-dstudy(gstudy.res,n, unit)  # Task 3:  self-defined n and unit
+
+#function
+dstudy.forboot <- function(x, n, unit) {
+  dstudy(x = x, n = n, unit = unit)
+}
+
+
+# boot.dstudy.res<-NULL
+# for(i in 1:nboot){
+#   temp<-gstudy.res
+#   temp[1]$gstudy.out[,2]<-boot.gstudy.res[,-(1:3)][,i]
+#   temp.dstudy<-dstudy(temp,n,unit)
+#   
+#   boot.dstudy.res<-rbind(boot.dstudy.res,
+#                          c(temp.dstudy$ds.df[,4],temp.dstudy$relvar,temp.dstudy$absvar,temp.dstudy$gcoef,temp.dstudy$dcoef)
+#                          )   
+# }
+# dstudy.res.CI<-t(apply(t(boot.dstudy.res),1,function(x){quantile(x, probs = c(.025, .975))}))
+
+
+
+
+#If boot is on
+# gstudy.res_boot <- gstudy.res
+# dstudy.res_boot <- dstudy.res
+# 
+# 
+# gstudy.res_boot$gstudy.out <-
+#   cbind(gstudy.res_boot$gstudy.out, gstudy.res.CI)
+# 
+# dstudy.res_boot$dcoef[2] <-
+#   dstudy.res.CI[nrow(dstudy.res.CI), 1]
+# dstudy.res_boot$dcoef[3] <- dstudy.res.CI[nrow(dstudy.res.CI), 2]
+# names(dstudy.res_boot$dcoef) <- c("Est", "2.5%", "97.5%")
+# dstudy.res_boot$gcoef[2] <-
+#   dstudy.res.CI[nrow(dstudy.res.CI) - 1, 1]
+# dstudy.res_boot$gcoef[3] <- dstudy.res.CI[nrow(dstudy.res.CI) - 1, 2]
+# names(dstudy.res_boot$gcoef) <- c("Est", "2.5%", "97.5%")
+# dstudy.res_boot$absvar[2] <-
+#   dstudy.res.CI[nrow(dstudy.res.CI) - 2, 1]
+# dstudy.res_boot$absvar[3] <- dstudy.res.CI[nrow(dstudy.res.CI) - 2, 2]
+# names(dstudy.res_boot$absvar) <- c("Est", "2.5%", "97.5%")
+# dstudy.res_boot$relvar[2] <-
+#   dstudy.res.CI[nrow(dstudy.res.CI) - 3, 1]
+# dstudy.res_boot$relvar[3] <- dstudy.res.CI[nrow(dstudy.res.CI) - 3, 2]
+# names(dstudy.res_boot$relvar) <- c("Est", "2.5%", "97.5%")
+# dstudy.res_boot$ds.df <-
+#   cbind(dstudy.res_boot$ds.df, dstudy.res.CI[1:(-4 + nrow(dstudy.res.CI)), ])
+
+#' Prints the results from the D-study
+#'
+#' Prints  output from fitting the \code{dstudy} function.
+#' @param x object of class \code{dStudy} returned from the \code{dstudy} function
+#' @param ... additional objects of the same type.
+#' @method print dStudy
+#' @seealso \code{\link{dstudy}}
+#' @export
+
+print.dStudy <- function(x, ...){
+  if(length(colnames(x$ds.df))==4){
+    colnames(x$ds.df) <- c("Source", "Est.Variance", "N", "Est.(Var/N)")
+    cat("\nThe generalizability coefficient is:", x$gcoef)
+    cat(".\nThe dependability coefficient is: ", x$dcoef,sep = "")
+    cat(".\nThe relative error  is: ", x$relvar, sep = "")
+    cat(".\nThe absolute error is: ", x$absvar, sep = "")
+  }else{colnames(x$ds.df) <- c("Source", "Est.Variance", "N", "Est.(Var/N)","2.5%","97.5%")
+  cat("\nThe generalizability coefficient is:", x$gcoef[1],"; Its 95% CI is [",x$gcoef[2],",",x$gcoef[3],"]",sep='')
+  cat(".\nThe dependability coefficient is: ", x$dcoef[1],"; Its 95% CI is [",x$dcoef[2],",",x$dcoef[3], "]",sep='')
+  cat(".\nThe relative error  is: ", x$relvar[1],"; Its 95% CI is [",x$relvar[2],",",x$relvar[3],    "]",sep='')
+  cat(".\nThe absolute error is: ", x$absvar[1],".; Its 95% CI is [",x$absvar[2],",",x$absvar[3],    "]",sep='')
+  
+  }
+  cat(".\n")
+  cat(".\n")
+  print(x$ds.df)
+  
+}
+
+# print.dStudy(dstudy.res_boot)
+
+# formular1 <- "Score ~ (1 | Person_ID) +  (1 | Item_ID) "
+# formular2 <- "Score ~ us(Occasion + 0 | Person_ID) +  us( Occasion + 0 | Item_ID) "
+# easyformular <- "Score = Occasion | Person_ID + Occasion | Item_ID "
+# makeeasyformular(formular1)
+# makeeasyformular(formular2)
+# 
+# makehardformular(makeeasyformular(formular1))
+# makehardformularMGtheory(makeeasyformular(formular2))
+# makeeasyformular(formular2)
+
+makeeasyformular <- function(formular) {
+  formular <- str_replace_all(formular, pattern = "\\~", replacement = "=")
+  formular <- str_replace_all(formular, pattern = "\\(1 \\|", replacement = "")
+  formular <- str_replace_all(formular, pattern = "us\\(", replacement = "")
+  formular <- str_replace_all(formular, pattern = "\\+ 0", replacement = "")
+  str_replace_all(formular, pattern = "\\)", replacement = "")
+}
+
+makehardformular <- function(formular) {
+  formular <- str_replace_all(formular, pattern = "\\=", replacement = "~(1|")
+  formular <- str_replace_all(formular, pattern = "\\+", replacement = ")+(1|")
+  paste0(formular, ")")
+}
+makehardformularMGtheory <- function(formular) {
+  formular <- str_replace_all(formular, pattern = "\\+", replacement = ") + ( 0 +")
+  formular <- str_replace_all(formular, pattern = "\\=", replacement = "~ ( 0 +")
+  paste0(formular, ")")
+}
+
+
+# multivariate G-theory functions -----------------------------------------
+cor2cov <- function(R, S) { # 
+  sweep(sweep(R, 1, S, "*"), 2, S, "*")
+}
+
+
+extract.VarCorr.glmmTMB <- function (x, row.names = NULL, optional = FALSE, 
+                                     order = c("cov.last", "lower.tri"), 
+                                     residCor, facetName) 
+{
+  order <- match.arg(order)
+  tmpf <- function(v, grp) {
+    lt.v <- lower.tri(v, diag = FALSE)
+    # vcov <- c(diag(v), v[lt.v <- lower.tri(v, diag = FALSE)])
+    sdcor <- c(attr(v, "stddev"), attr(v, "correlation")[lt.v])
+    nm <- rownames(v)
+    n <- nrow(v)
+    dd <- data.frame(grp = grp, 
+                     var1 = nm[c(seq(n), col(v)[lt.v])], 
+                     var2 = c(rep(NA, n), nm[row(v)[lt.v]]), 
+                     sdcor, 
+                     stringsAsFactors = FALSE)
+    if (order == "lower.tri") {
+      m <- matrix(NA, n, n)
+      diag(m) <- seq(n)
+      m[lower.tri(m)] <- (n + 1):(n * (n + 1)/2)
+      dd <- dd[m[lower.tri(m, diag = TRUE)], ]
+    }
+    dd
+  }
+  r <- do.call(rbind, c(mapply(tmpf, x, names(x), SIMPLIFY = FALSE), 
+                        deparse.level = 0))
+  if (attr(x, "useSc")) {
+    ss <- attr(x, "sc")
+    r <- rbind(r, data.frame(grp = "Residual", var1 = NA, 
+                             var2 = NA, vcov = ss^2, sdcor = ss), deparse.level = 0)
+  }
+  rownames(r) <- NULL
+  
+  ## replace 0 as residuals correlation
+  
+  if (all(r[r$sdcor == 0 & r$grp == "Residual", ]["sdcor"] == 0)) {
+    r[r$sdcor == 0 & r$grp == "Residual", ]["sdcor"] = residCor[lower.tri(residCor)]
+  }
+  
+  ## function to convert triangle matrix into correlation matrix
+  toCorrCovTbl <- function(dat, facet = facetName) {
+    
+    ## read in variance 
+    dat_cor = dat_cov = dat
+    
+    ## diagnal: sd, off-diagnal: cor
+    cor_mat <- as.matrix(dat[str_detect(colnames(dat), pattern = facetName)])
+    
+    if( any(is.na(cor_mat[lower.tri(cor_mat)])) ) {
+      cor_mat[lower.tri(cor_mat)] <- cor_mat[upper.tri(cor_mat)]
+    }else if (any(is.na(cor_mat[upper.tri(cor_mat)])) ) {
+      cor_mat[upper.tri(cor_mat)] <- cor_mat[lower.tri(cor_mat)]
+    }else{
+      cor_mat
+    }
+    
+    
+    dat_cor[, str_detect(colnames(dat_cor), facetName)] <- cor_mat
+    
+
+    ## correlation matrix to covariance matrix
+    R_mat = cor_mat
+    diag(R_mat) = 1
+    dat_cov[, str_detect(colnames(dat_cov), facetName)] <- cor2cov(R = R_mat, S = diag(cor_mat))
+    
+    # return
+    list(
+      cor_mat = dat_cor,
+      cov_mat = dat_cov
+    )
+  }
+  
+  
+  
+  ## adjust table
+  resTable <- r |> 
+    mutate(var2 = ifelse(is.na(var2), var1, var2)) |> 
+    pivot_wider(names_from = var2, values_from = sdcor) |> 
+    group_split(grp)  
+  
+  
+  list(
+    resTable_cor = do.call("rbind", lapply(resTable, \(x) toCorrCovTbl(dat = x, facet = facetName)$cor_mat)) |> 
+      rename(Source = grp, Fixed.Facet = var1),
+    resTable_cov = do.call("rbind", lapply(resTable, \(x) toCorrCovTbl(dat = x, facet = facetName)$cov_mat)) |> 
+      rename(Source = grp, Fixed.Facet = var1)
+  )
+  
+}
+
+
+# generalizability coefficient
+gCoef_mGTheory <- function(
+                           glmmTMBObj=NULL,
+                           residual_cov=NULL,
+                           person_ID=NULL, 
+                           weights = NULL,
+                           person_cov = NULL
+                           ) {
+  
+  ## calculate person variance components
+  if (is.null(person_cov)) {
+    person_sd  <- attr(lme4::VarCorr(glmmTMBObj)$cond[[person_ID]], "stddev")
+    person_cor <- attr(lme4::VarCorr(glmmTMBObj)$cond[[person_ID]], "correlation")
+    person_cov <- diag(person_sd) %*% person_cor %*% diag(person_sd)
+  }
+
+  if (!is.matrix(person_cov) || !is.matrix(residual_cov) ||
+      nrow(person_cov) != ncol(person_cov) ||
+      !identical(dim(person_cov), dim(residual_cov))) {
+    stop("Person and residual covariance matrices must be square and have matching dimensions.", call. = FALSE)
+  }
+
+  weight_text <- if (is.null(weights)) "" else weights
+  a <- suppressWarnings(as.numeric(strsplit(weight_text, ";", fixed = TRUE)[[1]]))
+  if (length(a) != nrow(person_cov) || any(!is.finite(a)) || any(a < 0) || sum(a) <= 0) {
+    stop(
+      sprintf("Enter %d non-negative fixed-facet weights separated by semicolons.", nrow(person_cov)),
+      call. = FALSE
+    )
+  }
+  a <- a / sum(a)
+  person_variance <- as.numeric(t(a) %*% person_cov %*% a)
+  residual_variance <- as.numeric(t(a) %*% residual_cov %*% a)
+  if (!is.finite(person_variance) || person_variance <= 0 || !is.finite(residual_variance)) {
+    stop("The weighted variance matrices do not yield a valid coefficient.", call. = FALSE)
+  }
+
+  1 / (1 + residual_variance / person_variance)
+}
+
+
+## Print fixed effects and g-coefficients for mG-theory
+extractFixedCoefsmG <- \(lmeObj){
+  fixedEstTable <- summary(lmeObj)$coefficients$cond
+  colnames(fixedEstTable) <- c("Estimate", "SE", "Z", "p-value")
+  as.data.frame(fixedEstTable)
+}
+
+## variance-covariance component from glmmTMB object
+glmmTMB.VarCov <- function(glmmTMBobj, source, mat_type = "us") {
+  res = VarCorr(glmmTMBobj)
+  if (mat_type == "diag") {
+    cor2cov(S = attr(res$cond[[source]], "stddev"), R = diag(1, length(attr(res$cond[[source]], "stddev"))))
+  }else if(mat_type == "us"){
+    sd_facet  <- attr(res$cond[[source]], "stddev")
+    cor_facet <- attr(res$cond[[source]], "correlation")
+    cov_facet <- cor2cov(R = cor_facet, S = sd_facet)
+    cov_facet
+  }
+}
+
+## Extract all variance-covariance components
+glmmTMB.VarCovMat.forboot <- function(x, facets){
+  res = NULL
+  for (facet in facets) {
+    res = c(res, as.numeric(VarCorr(x)[[c("cond", facet)]]))
+  }
+  res
+}
+
+## Arguments
+## x: glmmTMB result
+## n: update N
+## unit
+# list(
+#   lmmFit0 = lmmFit0,
+#   lmmFit = lmmFit,
+#   data = dat2,
+#   fixedEffect = fixedEffectEstimate,
+#   VarComp = resVarCov,
+#   mGtheoryFormula = formulaWtResidTxt,
+#   g_coef = g_coef # return a mGStudy class
+# )
+# n = data.frame(
+#   "Item" = 10
+# )
+dstudy.VarCov <- function(gstudyVarCovMat, n, facetName) {
+  
+  gstudyVarCorList <- gstudyVarCovMat |> 
+    group_split(Source)
+  names(gstudyVarCorList) <- sapply(gstudyVarCorList, \(x) unique(x$Source))
+  
+  dstudyVarCorList <- c(
+    gstudyVarCorList[setdiff(names(gstudyVarCorList), c(colnames(n), "Residual"))],
+    lapply(gstudyVarCorList[c(colnames(n), "Residual")], \(x) {
+      cbind(dplyr::select(x, -starts_with(facetName)), 
+            dplyr::select(x, starts_with(facetName)) / prod(as.numeric(n)))
+    })
+  )
+  # Sigmap <- dplyr::select(dstudyVarCorList[[IDName]], starts_with(facetName))
+  # SigmapI <- dplyr::select(dstudyVarCorList[["Residual"]], starts_with(facetName))
+  # SigmaI <- dplyr::select(dstudyVarCorList[[names(n)]], starts_with(facetName))
+  # 
+  Reduce("rbind", dstudyVarCorList)
+}
