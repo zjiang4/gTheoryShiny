@@ -1,0 +1,38 @@
+{
+  "seeds": [20261004, 20261005, 20261006],
+  "bootstrap_attempted": 1000,
+  "bootstrap_complete": 1000,
+  "bootstrap_seconds": 21.91,
+  "simulation_seconds": 95.32,
+  "one_singular": false,
+  "two_singular": false,
+  "one_formula": "Score ~ (1 | Person) + (1 | Item)",
+  "two_formula": ["Score ~ (1 | Person) + (1 | Item) + (1 | Rater) + (1 | Person:Item) + ", "    (1 | Person:Rater) + (1 | Item:Rater)"],
+  "conditions": [
+    {
+      "condition": "one_small",
+      "P": 30,
+      "I": 6,
+      "R": 1
+    },
+    {
+      "condition": "one_large",
+      "P": 80,
+      "I": 12,
+      "R": 1
+    },
+    {
+      "condition": "two_small",
+      "P": 30,
+      "I": 6,
+      "R": 3
+    },
+    {
+      "condition": "two_large",
+      "P": 80,
+      "I": 8,
+      "R": 4
+    }
+  ],
+  "replications_per_condition": 100
+}

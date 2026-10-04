@@ -1,0 +1,10 @@
+{
+  "dataset": "example_two_facet.csv",
+  "baseline_g": 0.9327484,
+  "baseline_d": 0.9127507,
+  "revised_output": "\nThe generalizability coefficient is: 0.9534597.\nThe dependability coefficient is: 0.9361762.\nThe relative error  is: 0.0505749.\nThe absolute error is: 0.07063724.\n.\n        Source Est.Variance  N Est.(Var/N)\n1  Item:Person   0.25827717 16 0.016142323\n2 Rater:Person   0.10578123  4 0.026445307\n3       Person   1.03611642  1 1.036116419\n4   Item:Rater   0.07502145 64 0.001172210\n5         Item   0.04964384 16 0.003102740\n6        Rater   0.06314957  4 0.015787393\n7     Residual   0.51118520 64 0.007987269",
+  "language_invariant": true,
+  "browser_errors": [],
+  "browser_version": "154.0.4258.53",
+  "captured_at": "2026-10-04"
+}
